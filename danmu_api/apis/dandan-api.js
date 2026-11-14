@@ -1,3 +1,4 @@
+import { parseMediaIdentity, resolveEnglishMediaIdentity, filterStrictCandidates, selectStrictEpisode } from '../utils/strict-media-match.js';
 import { globals } from '../configs/globals.js';
 import { getPageTitle, jsonResponse, httpGet, sourceLogContext, runWithHttpCache, httpCacheContext } from '../utils/http-util.js';
 import { log } from '../utils/log-util.js'
@@ -511,7 +512,10 @@ function resolveAnimeDetailForSearch(anime, requestAnimeDetailsMap) {
 }
 
 async function searchAnimeBody(url, preferAnimeId = null, preferSource = null, detailStore = null, targetPlatform = null, forceRefresh = false) {
-  let queryTitle = url.searchParams.get("keyword");
+  let queryTitle = url.searchParams.get("keyword") || "";
+  if (globals.searchTitleMapping) {
+    queryTitle = globals.resolveTitleMapping(queryTitle) || queryTitle;
+  }
 
   // 搜索词杂音清理：移除画质/配音/版本等杂音词后再提交源站搜索
   if (globals.titleNoiseFilter) {
@@ -1907,7 +1911,15 @@ function createMatchPlatformOrder(preferredPlatform, secondaryPreferredPlatform 
   return withoutSecondary;
 }
 
-async function executeMatchAttempt({ req, title, season, episode, year, preferredPlatform, secondaryPreferredPlatform, preferAnimeId, preferSource, offsets, mapping }) {
+async function executeMatchAttempt({ req, title, season, episode, year, preferredPlatform, secondaryPreferredPlatform, preferAnimeId, preferSource, offsets, mapping, identity = null }) {
+  let strictIdentity = null;
+  if (globals.strictAutoMatch) {
+    strictIdentity = { ...(identity || {}), title, aliases: [...new Set([title, ...(identity?.aliases || [])])], season, episode, year: year || null,
+      kind: mapping?.targetType ? (/电影|剧场版/.test(mapping.targetType) ? 'movie' : 'series') : (identity?.kind || (season != null || episode != null ? 'series' : null)) };
+    if (!mapping) strictIdentity = await resolveEnglishMediaIdentity(strictIdentity);
+    title = strictIdentity.searchTitle || title;
+  }
+
   const dynamicPlatformOrder = createMatchPlatformOrder(preferredPlatform, secondaryPreferredPlatform);
   const targetPlatform = dynamicPlatformOrder.length > 0 ? dynamicPlatformOrder[0] : null;
   const detailStore = new Map();
@@ -1928,6 +1940,20 @@ async function executeMatchAttempt({ req, title, season, episode, year, preferre
   const targetCandidates = mapping ? filterMappingTargetCandidates(searchData.animes, mapping) : searchData.animes;
   if (mapping && targetCandidates.length === 0) {
     return { resAnime: null, resEpisode: null, spilloverMatched: false, title, season, episode, cacheWarning };
+  }
+
+  if (strictIdentity) {
+    const candidates = filterStrictCandidates(targetCandidates, strictIdentity);
+    for (const platform of dynamicPlatformOrder.length ? dynamicPlatformOrder : [null]) {
+      for (const anime of candidates) {
+        if (platform && anime.source !== platform && ({ qq: 'tencent', qiyi: 'iqiyi', imgo: 'mango', bilibili1: 'bilibili' }[platform] || platform) !== anime.source && !String(anime.animeTitle || '').includes(`from ${platform}`)) continue;
+        const details = getBangumiDataForMatch(anime, detailStore);
+        const selectedEpisode = selectStrictEpisode(details?.bangumi?.episodes, strictIdentity);
+        if (selectedEpisode) return { resAnime: anime, resEpisode: selectedEpisode, spilloverMatched: false, title, season, episode, cacheWarning };
+      }
+    }
+    return { resAnime: null, resEpisode: null, spilloverMatched: false, title, season, episode,
+      cacheWarning: cacheWarning || '未找到类型、年份、季数和集数均明确匹配的作品，请手动选择弹幕。' };
   }
 
   const targetSearchData = { ...searchData, animes: targetCandidates };
@@ -2030,7 +2056,9 @@ export async function matchAnime(url, req, clientIp) {
     log("info", `[system] [match] Processing anime match for query: ${fileName}`);
     log("info", `[system] [match] Parsed cleanFileName: ${cleanFileName}, preferredPlatform: ${preferredPlatform}`);
 
-    const parsed = await extractTitleSeasonEpisode(cleanFileName);
+    let parsed = await extractTitleSeasonEpisode(cleanFileName);
+    const identity = globals.strictAutoMatch ? parseMediaIdentity(cleanFileName, parsed, body) : null;
+    if (identity) parsed = { ...parsed, title: identity.title, season: identity.season, episode: identity.episode, year: identity.year };
     const originalTitle = prepareQueryTitle(parsed.title);
     const originalSeason = parsed.season;
     const originalEpisode = parsed.episode;
@@ -2044,7 +2072,8 @@ export async function matchAnime(url, req, clientIp) {
       episode: originalEpisode
     });
     const manualPreferenceTitle = findSeasonPreferenceTitle(preferenceTitles, originalSeason);
-    const mapping = manualPreferenceTitle ? null : configuredMapping;
+    const mappingConflictsWithYear = globals.strictAutoMatch && originalYear && configuredMapping?.targetYear && Number(originalYear) !== Number(configuredMapping.targetYear);
+    const mapping = manualPreferenceTitle || mappingConflictsWithYear ? null : configuredMapping;
     if (configuredMapping && manualPreferenceTitle) {
       log('info', `[system] [auto-match-mapping] Explicit manual preference for "${manualPreferenceTitle}" S${originalSeason} overrides rule "${configuredMapping.raw}"`);
     } else if (configuredMapping) {
@@ -2072,7 +2101,8 @@ export async function matchAnime(url, req, clientIp) {
         preferAnimeId: null,
         preferSource: null,
         offsets: null,
-        mapping
+        mapping,
+        identity
       });
       mappingApplied = Boolean(attempt.resAnime && attempt.resEpisode);
       if (!mappingApplied) {
@@ -2098,7 +2128,8 @@ export async function matchAnime(url, req, clientIp) {
         preferAnimeId,
         preferSource,
         offsets,
-        mapping: null
+        mapping: null,
+        identity
       });
     }
 

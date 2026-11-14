@@ -31,6 +31,7 @@ const FONGMI_DANMAKU_PATHS = new Set([
 ]);
 
 const TITLE_MAPPING_PATHS = new Set([
+  "/api/v2/search/anime",
   "/api/v2/match",
   "/api/v2/favorite/add",
   "/api/favorite/add",

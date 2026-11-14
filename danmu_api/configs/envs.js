@@ -723,6 +723,8 @@ export class Envs {
       'EPISODE_TITLE_FILTER': { category: 'match', type: 'text', description: '剧集标题过滤规则' },
       'ENABLE_ANIME_EPISODE_FILTER': { category: 'match', type: 'boolean', description: '控制手动搜索的时候是否根据ANIME_TITLE_FILTER进行剧名过滤以及根据EPISODE_TITLE_FILTER进行集标题过滤' },
       'STRICT_TITLE_MATCH': { category: 'match', type: 'boolean', description: '严格标题匹配模式' },
+      'STRICT_AUTO_MATCH': { category: 'match', type: 'boolean', description: '严格核对标题、类型、年份、季集；英文标题仅采用身份唯一的影视元数据，不确定时返回未匹配' },
+      'SEARCH_TITLE_MAPPING': { category: 'match', type: 'boolean', description: '手动搜索应用已配置的标题映射' },
       'TITLE_TO_CHINESE': { category: 'match', type: 'boolean', description: '外语标题转换中文开关' },
       'ANIME_TITLE_SIMPLIFIED': { category: 'match', type: 'boolean', description: '搜索的剧名标题自动繁转简' },
       'TITLE_MAPPING_TABLE': { category: 'match', type: 'map', description: '本机剧名映射表，用于自动匹配、FongMi、收藏时替换标题进行搜索。精确标题优先；未命中时会忽略标题尾部括号年份再匹配（如“变形金刚3：月黑之时(2011)”可命中“变形金刚3：月黑之时”）。本机规则优先于远程规则。格式：原始标题->映射标题;原始标题->映射标题;...，例如："唐朝诡事录->唐朝诡事录之西行;国色芳华->锦绣芳华"' },
@@ -832,6 +834,8 @@ export class Envs {
       gradientColors: this.get('GRADIENT_COLORS', '16478873,3389695', 'string'), // 渐变色带（B站标准粉蓝 #FB7299→#33B8FF），CONVERT_COLOR为color时生效
       danmuOutputFormat: this.get('DANMU_OUTPUT_FORMAT', 'json', 'string'), // 弹幕输出格式配置（默认 json，可选值：json, xml, ...danAnyFormats）
       strictTitleMatch: this.get('STRICT_TITLE_MATCH', false, 'boolean'), // 严格标题匹配模式配置（默认 false，宽松模糊匹配）
+      strictAutoMatch: this.get('STRICT_AUTO_MATCH', false, 'boolean'),
+      searchTitleMapping: this.get('SEARCH_TITLE_MAPPING', false, 'boolean'),
       titleToChinese: this.get('TITLE_TO_CHINESE', false, 'boolean'), // 外语标题转换中文开关
       animeTitleSimplified: this.get('ANIME_TITLE_SIMPLIFIED', false, 'boolean'), // 搜索的剧名标题自动繁转简
       titleMappingTable: this.resolveTitleMappingTable(), // 剧名映射表，用于自动匹配时替换标题进行搜索

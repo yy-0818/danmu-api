@@ -1534,3 +1534,21 @@ test('远程季集映射表：刷新接口保留路径、只接受 ADMIN_TOKEN�
     resetRemoteAutoMatchMappingForTests();
   }
 });
+
+
+test('手动搜索可显式启用标题映射，并保留正确剧集缓存', async () => {
+  resetSearchState();
+  const env = {
+    TITLE_MAPPING_TABLE: 'Wednesday->星期三',
+    SEARCH_TITLE_MAPPING: 'true',
+    SOURCE_ORDER: 'douban',
+  };
+  Globals.init(env);
+  const anime = createFavoriteAnime('星期三', 1, 919002);
+  Globals.searchCache = new Map();
+  setSearchCache('星期三', [favoriteSearchResult(anime)], new Map([[anime.animeId, anime]]));
+  const response = await callWorker('http://localhost/api/v2/search/anime?keyword=Wednesday', { env });
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.json.animes[0].animeId, anime.animeId);
+  assert.strictEqual(Globals.searchCache.has('Wednesday'), false);
+});

@@ -1,3 +1,23 @@
+// 人人视频的复合 ID 编码进独立的安全整数区间，允许 Serverless 冷实例恢复。
+const RENREN_ID_BASE = 8_000_000_000_000_000;
+const RENREN_ID_RADIX = 10_000_000;
+function decodeRenrenEpisodeId(id) {
+    if (!Number.isSafeInteger(id)) return null;
+    const value = id - RENREN_ID_BASE;
+    if (value < 0 || value >= RENREN_ID_RADIX ** 2) return null;
+    const drama = Math.floor(value / RENREN_ID_RADIX);
+    const episode = value % RENREN_ID_RADIX;
+    return drama > 0 && episode > 0 ? `${drama}-${episode}` : null;
+}
+function encodeRenrenEpisodeId(url, title) {
+    if (!String(title).includes('【renren】')) return null;
+    const parts = String(url).match(/^([1-9]\d*)-([1-9]\d*)$/);
+    if (!parts) return null;
+    const [drama, episode] = parts.slice(1).map(Number);
+    if (drama >= RENREN_ID_RADIX || episode >= RENREN_ID_RADIX) return null;
+    return RENREN_ID_BASE + drama * RENREN_ID_RADIX + episode;
+}
+
 import { globals } from '../configs/globals.js';
 import { log } from './log-util.js'
 import { Anime } from "../models/dandan-model.js";
@@ -428,7 +448,7 @@ export function setCommentCache(videoUrl, comments) {
 export function getEpisodeIdFloor() {
     let maxId = 10001;
     const include = episode => {
-        if (Number.isSafeInteger(episode?.id) && episode.id >= 0) maxId = Math.max(maxId, episode.id);
+        if (Number.isSafeInteger(episode?.id) && episode.id >= 0 && !decodeRenrenEpisodeId(episode.id)) maxId = Math.max(maxId, episode.id);
     };
     const includeDetails = details => {
         if (!Array.isArray(details)) return;
@@ -470,9 +490,10 @@ function allocateEpisode(url, title) {
         return existingEpisode; // 返回已存在的 episode
     }
 
-    const nextId = globals.episodeNum + 1;
+    const stableId = encodeRenrenEpisodeId(url, title);
+    const nextId = stableId ?? (globals.episodeNum + 1);
     if (!Number.isSafeInteger(nextId) || nextId >= Number.MAX_SAFE_INTEGER) throw new Error('剧集 ID 超出安全范围，请清理剧集缓存后重试');
-    globals.episodeNum = nextId;
+    if (stableId === null) globals.episodeNum = nextId;
     const newEpisode = { id: nextId, url: url, title: title };
 
     // 添加新对象
@@ -497,6 +518,8 @@ export function removeEpisodeByUrl(url) {
 
 // 根据 ID 查找 URL
 export function findUrlById(id) {
+    const stableUrl = decodeRenrenEpisodeId(id);
+    if (stableUrl) return stableUrl;
     const episode = globals.episodeIds.find(episode => episode.id === id);
     if (episode) {
         log("info", `[cache] Found URL for ID ${id}: ${episode.url}`);
@@ -545,6 +568,7 @@ export function findTitleById(id) {
         return resolved.link.title;
     }
 
+    if (decodeRenrenEpisodeId(id)) return '【renren】 人人视频';
     log("error", `[cache] No TITLE found for ID: ${id}`);
     return null;
 }
