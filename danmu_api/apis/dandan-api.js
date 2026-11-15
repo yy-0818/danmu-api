@@ -1,3 +1,4 @@
+import { getSharedCommentCache, setSharedCommentCache } from '../utils/shared-comment-cache.js';
 import { parseMediaIdentity, resolveEnglishMediaIdentity, filterStrictCandidates, selectStrictEpisode } from '../utils/strict-media-match.js';
 import { globals } from '../configs/globals.js';
 import { getPageTitle, jsonResponse, httpGet, sourceLogContext, runWithHttpCache, httpCacheContext } from '../utils/http-util.js';
@@ -6,7 +7,7 @@ import { simplized } from '../utils/zh-util.js';
 import { setRedisKey, updateRedisCaches } from "../utils/redis-util.js";
 import { setLocalRedisKey, updateLocalRedisCaches } from "../utils/local-redis-util.js";
 import {
-    setCommentCache, addAnime, findAnimeIdByCommentId, findTitleById, findUrlById, getCommentCache, getPreferAnimeId,
+    addAnime, findAnimeIdByCommentId, findTitleById, findUrlById, getPreferAnimeId,
     getSearchCache, removeEarliestAnime, resolveAnimeById, resolveAnimeByIdFromDetailStore, setPreferByAnimeId, setPreferForTitle, setSearchCache, storeAnimeIdsToMap, writeCacheToFile,
     updateLocalCaches, setLastSearch, getLastSearch, findAnimeTitleById, findIndexById, hasSeasonSpecificPreference, hasLegacySeasonPreference, getAddAnimeError, mergeAddAnimeError
 } from "../utils/cache-util.js";
@@ -2454,7 +2455,7 @@ async function fetchMergedComments(url, animeTitle, commentId) {
   log("info", `[merge] 开始获取 [${sourceTag}] 聚合弹幕...`);
 
   // 1. 检查聚合缓存
-  const cached = getCommentCache(resolveCommentCacheKey(url));
+  const cached = await getSharedCommentCache(resolveCommentCacheKey(url));
   if (cached) {
     log("info", `[merge] 命中缓存 [${sourceTag}]，返回 ${cached.length} 条`);
     return cached;
@@ -2658,7 +2659,7 @@ export async function getComment(path, queryFormat, segmentFlag, clientIp, inclu
 
   // 检查弹幕缓存
   const cacheKey = resolveCommentCacheKey(url);
-  const cachedComments = getCommentCache(cacheKey);
+  const cachedComments = await getSharedCommentCache(cacheKey);
   if (cachedComments !== null) {
     let videoDuration = shouldAttachDuration ? await resolveMergedDuration(url) : null;
     if (shouldAttachDuration) {
@@ -2848,7 +2849,7 @@ export async function getComment(path, queryFormat, segmentFlag, clientIp, inclu
     if (danmus && danmus.comments) danmus = danmus.comments;
     if (!Array.isArray(danmus)) danmus = [];
     if (danmus.length > 0) {
-        setCommentCache(cacheKey, danmus);
+        await setSharedCommentCache(cacheKey, danmus);
     }
   }
 
@@ -2899,7 +2900,7 @@ export async function getCommentByUrl(videoUrl, queryFormat, segmentFlag, includ
     const shouldAttachDuration = shouldIncludeVideoDuration(queryFormat, includeDuration);
     // 检查弹幕缓存
     const cacheKey = resolveCommentCacheKey(url);
-    const cachedComments = getCommentCache(cacheKey);
+    const cachedComments = await getSharedCommentCache(cacheKey);
     if (cachedComments !== null) {
       const responseData = buildDanmuResponse({
         errorCode: 0,
@@ -2978,7 +2979,7 @@ export async function getCommentByUrl(videoUrl, queryFormat, segmentFlag, includ
 
     // 缓存弹幕结果
     if (danmus.length > 0) {
-      setCommentCache(cacheKey, danmus);
+      await setSharedCommentCache(cacheKey, danmus);
     }
 
     const responseData = buildDanmuResponse({
@@ -3020,7 +3021,7 @@ export async function getSegmentComment(segment, queryFormat) {
 
     // 检查弹幕缓存
     const cacheKey = resolveCommentCacheKey(url);
-    const cachedComments = getCommentCache(cacheKey);
+    const cachedComments = await getSharedCommentCache(cacheKey);
     if (cachedComments !== null) {
       const responseData = {
         errorCode: 0,
@@ -3082,7 +3083,7 @@ export async function getSegmentComment(segment, queryFormat) {
 
     // 缓存弹幕结果
     if (danmus.length > 0) {
-      setCommentCache(cacheKey, danmus);
+      await setSharedCommentCache(cacheKey, danmus);
     }
 
     const responseData = {

@@ -96,7 +96,7 @@ LogVar 弹幕 API 服务器
   - 永久收藏缓存（无 TTL、无数量上限，Node/Docker 可持久化到 `.cache/favoritesCache`）
   - 用户偏好记录（可通过 `MAX_LAST_SELECT_MAP` 配置，默认100条）
   - Redis 分布式缓存支持，包括本地redis和upstash redis（可选）
-  - 配置redis可持久化原有查询信息和永久收藏；搜索结果与弹幕缓存仍只保存在实例内存中，不会写入 Redis
+  - 配置 Upstash Redis 可持久化原有查询信息和永久收藏，并共享弹幕正文缓存；搜索结果仍保存在实例内存中。正文采用逐影片键和 COMMENT_CACHE_MINUTES 过期时间，默认 3 分钟，个人部署建议 60 分钟。缓存故障自动回源，低于 COMMENT_CACHE_MIN_COUNT 或超过 2 MiB 的正文仅留在内存。
   - 本地和Docker部署支持实时保存缓存到文件（挂载.cache目录即可）
 - **部署支持**：支持本地运行、Docker 容器化、Vercel 一键部署、Netlify 一键部署、EdgeOne Makers 一键部署、Cloudflare 一键部署、Hugging Face Spaces部署和 Docker 一键启动。
 - **手动选择记忆**：支持记住之前搜索title时手动选择的anime，并在后续的match自动匹配时优选该anime，支持记住集episode，下次自动匹配时会对集进行偏移【实验性】。
@@ -528,8 +528,8 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | MAX_LAST_SELECT_MAP    | 【可选】最后选择映射缓存大小限制，默认为`100`，lastSelectMap最多保存的条目数，超过限制时删除最早的条目（FIFO），用于存储查询关键字上次选择的animeId，最小值100，最大值1000       |
 | MAX_ANIMES    | 【可选】动漫标题缓存最大数量，默认为`100`，缓存最多保存的anime条目数，超过限制时删除最早的条目（FIFO），最小值100，最大值1000       |
 | BANGUMI_DATA_CACHE_DAYS    | 【可选】指定 Bangumi Data 数据有效期(天)，默认为：`7`，超过有效期后会下载更新，设置0则每次请求时强制异步更新（需开启`USE_BANGUMI_DATA`）'       |
-| UPSTASH_REDIS_REST_URL    | 【可选】Upstash redis url，需配合UPSTASH_REDIS_REST_TOKEN使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果和弹幕缓存不会写入 Redis（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
-| UPSTASH_REDIS_REST_TOKEN    | 【可选】Upstash redis token，需配合UPSTASH_REDIS_REST_URL使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果和弹幕缓存不会写入 Redis（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
+| UPSTASH_REDIS_REST_URL    | 【可选】Upstash redis url，需配合UPSTASH_REDIS_REST_TOKEN使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果不写入 Redis，弹幕正文会按 COMMENT_CACHE_MINUTES 共享缓存（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
+| UPSTASH_REDIS_REST_TOKEN    | 【可选】Upstash redis token，需配合UPSTASH_REDIS_REST_URL使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果不写入 Redis，弹幕正文会按 COMMENT_CACHE_MINUTES 共享缓存（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
 | LOCAL_CACHE_ENABLED    | 【可选】Node/Docker 通用文件缓存开关，默认为 `true`，需已有 `.cache` 目录；设置 `false` 后不读取或写入通用文件缓存，包括收藏与定时计划；已配置 Upstash 时仍可持久化。不影响本地弹幕文件、Bangumi Data、内存缓存或 Redis。运行中开启时保存当前内存，不自动导入旧文件。       |
 | LOCAL_REDIS_URL    | 【可选】本地 Redis 连接 URL，用于查询数据持久化，适用于 Docker 和本地部署，格式：`redis://:password@127.0.0.1:6379/0`，默认为空（不使用本地 Redis）。       |
 | DEPLOY_PLATFROM_ACCOUNT    | 【可选】部署账号ID，调用部署服务API需要，配置后可使用UI界面配置服务，不同部署平台获取方式可查看 [部署平台环境变量配置指南](https://github.com/huangxd-/danmu_api/tree/main/danmu_api/ui/README.md#部署平台环境变量配置指南) ，docker部署和本地node部署并不需要配置      |
@@ -868,3 +868,9 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 ### 📈项目 Star 数增长趋势
 #### Star History
 [![Star History Chart](https://api.star-history.com/svg?repos=huangxd-/danmu_api&type=Date)](https://www.star-history.com/#huangxd-/danmu_api&Date)
+
+### Vercel 免费 Redis 连接说明
+
+通过 Marketplace 安装 Upstash for Redis，选择 Free 并关闭自动升级。将集成生成的 `KV_REST_API_URL`、`KV_REST_API_TOKEN` 分别配置为应用使用的 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`（Secret），重新部署后生效。凭证只存放在 Vercel 环境变量中。
+
+弹幕缓存先读实例内存，未命中再读 Redis，仍未命中才请求源站；获取后等待 Redis 写入完成，避免 Serverless 请求结束后写入被中断。每部影片/集数及输出配置使用独立 SHA-256 键，TTL 不会因读取而延长。Redis 被清空、免费额度耗尽或短时故障只会导致回源，不影响已获取的弹幕返回。现有缓存清理界面仍只清理原来的索引与内存缓存；共享正文在 TTL 到期后自动删除。
