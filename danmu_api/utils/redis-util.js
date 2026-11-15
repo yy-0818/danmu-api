@@ -11,8 +11,14 @@ let redisConnectionKey = null;
 let redisConnectionVersion = 0;
 let replaceMissingFavorites = false;
 
-const currentRedisConnectionKey = () => globals.redisUrl && globals.redisToken
-  ? JSON.stringify([globals.redisUrl, globals.redisToken]) : null;
+const currentRedisConnectionKey = () => {
+  if (!String(globals.redisToken || '').trim()) return null;
+  try {
+    const url = new URL(String(globals.redisUrl || ''));
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) return null;
+    return JSON.stringify([globals.redisUrl, globals.redisToken]);
+  } catch { return null; }
+};
 const isCurrentConnection = (version, key) => version === redisConnectionVersion && key === currentRedisConnectionKey();
 
 function resetRedisConnection() {
@@ -48,6 +54,7 @@ const requestTimeout = key => String(key).startsWith('localDanmu:') ? 60000 : 30
 
 // 使用 GET 发送简单命令（如 PING 检查连接）
 export async function pingRedis() {
+  if (!currentRedisConnectionKey()) return undefined;
   const url = `${globals.redisUrl}/ping`;
   log("info", `[system] [redis] 开始发送 PING 请求:`, url);
   try {
@@ -71,6 +78,7 @@ export async function pingRedis() {
 
 // 使用 GET 发送 GET 命令（读取键值）
 export async function getRedisKey(key) {
+  if (!currentRedisConnectionKey()) return undefined;
   const url = `${globals.redisUrl}/get/${key}`;
   log("info", `[system] [redis] 开始发送 GET 请求:`, url);
   try {
@@ -94,6 +102,7 @@ export async function getRedisKey(key) {
 
 // 使用 POST 发送 SET 命令，仅在值变化时更新
 export async function setRedisKey(key, value) {
+  if (!currentRedisConnectionKey()) return { result: 'ERROR' };
   const version = redisConnectionVersion;
   const connectionKey = currentRedisConnectionKey();
   if (!canPersistCacheKey(key, 'upstash')) return { result: 'ERROR' };
@@ -137,6 +146,7 @@ export async function setRedisKey(key, value) {
 
 // 使用 POST 发送 SETEX 命令，仅在值变化时更新
 export async function setRedisKeyWithExpiry(key, value, expirySeconds) {
+  if (!currentRedisConnectionKey()) return { result: 'ERROR' };
   const version = redisConnectionVersion;
   const connectionKey = currentRedisConnectionKey();
   if (!canPersistCacheKey(key, 'upstash')) return { result: 'ERROR' };
@@ -180,6 +190,7 @@ export async function setRedisKeyWithExpiry(key, value, expirySeconds) {
 
 // 通用的 pipeline 请求函数
 export async function runPipeline(commands, { timeoutMs = Math.max(30000, ...commands.map(([, key]) => requestTimeout(key))) } = {}) {
+  if (!currentRedisConnectionKey()) return undefined;
   const version = redisConnectionVersion;
   const connectionKey = currentRedisConnectionKey();
   const url = `${globals.redisUrl}/pipeline`;

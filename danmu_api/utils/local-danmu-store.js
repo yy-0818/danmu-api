@@ -175,11 +175,15 @@ export async function saveLocalDanmu(resource) {
   return resource;
 }
 export async function getLocalDanmu(resourceKey) {
-  if (useRedis()) return unwrap(await getRedisKey(`localDanmu:data:${resourceKey}`)) || null;
+  if (useRedis()) {
+    if (!globals.redisValid) return null;
+    return unwrap(await getRedisKey(`localDanmu:data:${resourceKey}`)) || null;
+  }
   try { return JSON.parse(await fs.readFile(file(resourceKey), 'utf8')); } catch { return null; }
 }
 export async function listLocalDanmu() {
   if (useRedis()) {
+    if (!globals.redisValid) return [];
     const index = unwrap(await getRedisKey('localDanmu:index')) || [];
     return Array.isArray(index) ? sortByUpdatedAt(index.map(metadataOnly)) : [];
   }
@@ -208,6 +212,7 @@ export async function listLocalDanmu() {
 }
 export async function removeLocalDanmu(resourceKey) {
   if (useRedis()) {
+    if (!globals.redisValid) throw new Error('云端 Redis 未连接');
     await withIndexLock(async () => {
       const index = unwrap(await getRedisKey('localDanmu:index')) || [];
       const next = Array.isArray(index) ? index.filter(x => x.resourceKey !== resourceKey).map(metadataOnly) : [];
