@@ -874,3 +874,5 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 通过 Marketplace 安装 Upstash for Redis，选择 Free 并关闭自动升级。将集成生成的 `KV_REST_API_URL`、`KV_REST_API_TOKEN` 分别配置为应用使用的 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`（Secret），重新部署后生效。凭证只存放在 Vercel 环境变量中。
 
 弹幕缓存先读实例内存，未命中再读 Redis，仍未命中才请求源站；获取后等待 Redis 写入完成，避免 Serverless 请求结束后写入被中断。每部影片/集数及输出配置使用独立 SHA-256 键，TTL 不会因读取而延长。Redis 被清空、免费额度耗尽或短时故障只会导致回源，不影响已获取的弹幕返回。现有缓存清理界面仍只清理原来的索引与内存缓存；共享正文在 TTL 到期后自动删除。
+
+请求记录使用独立 Redis 列表逐条原子追加，保留最近 100 条、最后写入后 7 天过期；今日计数按 UTC+8 日期原子累加。读取页面时直接查询共享记录，避免读取另一实例的旧内存。清理“请求历史记录”会同时清理共享列表和当日计数。未连接 Redis 时继续显示本实例记录，页面会提示实际存储状态。

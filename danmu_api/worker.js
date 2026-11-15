@@ -1,3 +1,4 @@
+import { appendSharedRequestRecord } from './utils/shared-request-records.js';
 import { Globals } from './configs/globals.js';
 import { jsonResponse } from './utils/http-util.js';
 import { log, formatLogMessage } from './utils/log-util.js'
@@ -236,6 +237,8 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
     };
 
     globals.reqRecords.push(requestRecord);
+    // Await the atomic append before returning a Serverless response.
+    await appendSharedRequestRecord(requestRecord);
 
     // 限制记录数量不超过 MAX_RECORDS
     if (globals.reqRecords.length > globals.MAX_RECORDS) {

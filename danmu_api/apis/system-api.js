@@ -1,3 +1,4 @@
+import { readSharedRequestRecords, clearSharedRequestRecords } from '../utils/shared-request-records.js';
 import { globals } from "../configs/globals.js";
 import { getEpisodeIdFloor, queryCacheKeys } from "../utils/cache-util.js";
 import { jsonResponse } from "../utils/http-util.js";
@@ -253,6 +254,7 @@ export async function handleClearCache(req) {
       || (effectiveItems.includes('requestHistory') && ['reqRecords', 'todayReqNum'].includes(key)));
     const failedBackends = [];
     const restartBackends = [];
+    if (effectiveItems.includes('requestHistory') && !(await clearSharedRequestRecords())) failedBackends.push('upstash-request-records');
     if (keys.length) {
       const targets = [
         ['file', globals.localCacheValid && globals.localCacheEnabled !== false, async () => (await import('../utils/cache-util.js')).updateLocalCaches({ keys, force: true })],
@@ -331,10 +333,15 @@ function maskParamValues(value) {
  * 处理获取请求记录的请求
  * @returns {Response} 包含请求记录的响应
  */
-export function handleReqRecords() {
+export async function handleReqRecords() {
   // 返回请求记录，按时间倒序排列（最新的在前）
-  let records = [...globals.reqRecords].reverse();
-  const todayReqNum = globals.todayReqNum || 0;
+  const shared = await readSharedRequestRecords();
+  let records = shared?.records ?? [...globals.reqRecords].reverse();
+  const todayReqNum = shared?.todayReqNum ?? (globals.todayReqNum || 0);
+  const storage = shared ? 'redis' : 'memory';
+  const storageStatus = shared ? 'Redis 已连接 · 请求记录跨实例保存'
+    : globals.redisValid ? 'Redis 记录读取暂时失败 · 显示本实例记录'
+    : '仅保存本实例记录 · 云端持久化需要连接 Redis';
   
   // 非 admin token 时，对请求记录脱敏：IP / 接口查询值 / 请求体值
   if (globals.currentToken !== globals.adminToken) {
@@ -356,7 +363,7 @@ export function handleReqRecords() {
     });
   }
   
-  return jsonResponse({ records, todayReqNum }, 200);
+  return jsonResponse({ records, todayReqNum, storage, storageStatus }, 200);
 }
 
 /**

@@ -18,6 +18,8 @@ async function renderRequestRecords() {
         const data = await response.json();
         const records = data.records;
         const todayReqNum = data.todayReqNum;
+        const storageStatus = document.getElementById('request-records-storage-status');
+        if (storageStatus) storageStatus.textContent = data.storageStatus || '当前实例记录';
 
         // 显示今日请求总数
         const totalRequestsElement = document.getElementById('total-requests-today');

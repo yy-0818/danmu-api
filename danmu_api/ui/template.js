@@ -317,7 +317,7 @@ export const HTML_TEMPLATE = /* html */ `
                         <button class="btn btn-primary" id="refresh-request-records">${renderIcon('refresh-cw')} 刷新记录</button>
                         <span id="total-requests-today" style="color: #ff5722; font-size: 1.2em; font-weight: bold;"></span>
                     </div>
-                    <span style="color: #666;">云服务部署需要配置redis</span>
+                    <span id="request-records-storage-status" style="color: #666;">正在检查记录存储状态…</span>
                 </div>
                 <div class="request-records-container" id="request-records-list"></div>
             </div>

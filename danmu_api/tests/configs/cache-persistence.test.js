@@ -63,6 +63,7 @@ test('persistent cache regression: Local Redis priority and independent backends
       remoteCommands.push(...commands);
       return Response.json(commands.map(([op, key, value]) => {
         if (op === 'GET') return { result: remote.get(key) ?? null };
+        if (op === 'DEL') return { result: remote.delete(key) ? 1 : 0 };
         remote.set(key, value); return { result: 'OK' };
       }));
     });
